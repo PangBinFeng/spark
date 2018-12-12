@@ -223,6 +223,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       val workOffers = activeExecutors.map { case (id, executorData) =>
         new WorkerOffer(id, executorData.executorHost, executorData.freeCores)
       }.toIndexedSeq
+      // 调用 resourceOffers 分配 task 到各个 executor 上
+      // 发送 launchTask 消息到各个 Executor 上
       launchTasks(scheduler.resourceOffers(workOffers))
     }
 

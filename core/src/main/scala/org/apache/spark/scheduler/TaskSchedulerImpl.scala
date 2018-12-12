@@ -173,11 +173,14 @@ private[spark] class TaskSchedulerImpl(
     val tasks = taskSet.tasks
     logInfo("Adding task set " + taskSet.id + " with " + tasks.length + " tasks")
     this.synchronized {
+      // 每一个 TaskSet 都有唯一的 TaskSetManager
       val manager = createTaskSetManager(taskSet, maxTaskFailures)
       val stage = taskSet.stageId
       val stageTaskSets =
         taskSetsByStageIdAndAttempt.getOrElseUpdate(stage, new HashMap[Int, TaskSetManager])
+      // manager 缓存
       stageTaskSets(taskSet.stageAttemptId) = manager
+      // 确保只有一个对应 TaskSet
       val conflictingTaskSet = stageTaskSets.exists { case (_, ts) =>
         ts.taskSet != taskSet && !ts.isZombie
       }
@@ -202,6 +205,7 @@ private[spark] class TaskSchedulerImpl(
       }
       hasReceivedTask = true
     }
+    // backend 负责创建 与 注册 Application
     backend.reviveOffers()
   }
 
@@ -249,6 +253,9 @@ private[spark] class TaskSchedulerImpl(
       s" ${manager.parent.name}")
   }
 
+  /**
+    * 具体的 task 分配算法
+    */
   private def resourceOfferSingleTaskSet(
       taskSet: TaskSetManager,
       maxLocality: TaskLocality,
@@ -293,11 +300,15 @@ private[spark] class TaskSchedulerImpl(
     // Also track if new executor is added
     var newExecAvail = false
     for (o <- offers) {
+      // 没见过的 host 顺手加到缓存里
       if (!hostToExecutors.contains(o.host)) {
         hostToExecutors(o.host) = new HashSet[String]()
       }
+      // 没见过的 executor 顺手加到换村里
       if (!executorIdToRunningTaskIds.contains(o.executorId)) {
+        // 记一下ExecutorId
         hostToExecutors(o.host) += o.executorId
+        // 加到 dagScheduler 中
         executorAdded(o.executorId, o.host)
         executorIdToHost(o.executorId) = o.host
         executorIdToRunningTaskIds(o.executorId) = HashSet[Long]()
